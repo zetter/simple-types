@@ -2,56 +2,60 @@ require 'term'
 require 'type'
 
 def join(a, b)
-  return a if subtype_of?(b, a)
-  return b if subtype_of?(a, b)
-  if a.is_a?(Type::Record) && b.is_a?(Type::Record)
+  if subtype_of?(b, a)
+    a
+  elsif subtype_of?(a, b)
+    b
+  elsif a.is_a?(Type::Record) && b.is_a?(Type::Record)
     join_keys = a.members.keys & b.members.keys
     members = join_keys.map do |key|
       [key, join(a.members[key], b.members[key])]
     end.to_h
-    return Type::Record.new(members)
-  end
-  if a.is_a?(Type::Function) && b.is_a?(Type::Function)
+    Type::Record.new(members)
+  elsif a.is_a?(Type::Function) && b.is_a?(Type::Function)
     begin
       argument_meet = meet(a.from, b.from)
     rescue TypeError
       return Type::Top
     end
-    return Type::Function.new(argument_meet, join(a.to, b.to))
+    Type::Function.new(argument_meet, join(a.to, b.to))
+  else
+    Type::Top
   end
-  Type::Top
 end
 
 def meet(a, b)
-  return a if subtype_of?(a, b)
-  return b if subtype_of?(b, a)
-  if a.is_a?(Type::Record) && b.is_a?(Type::Record)
+  if subtype_of?(a, b)
+    a
+  elsif subtype_of?(b, a)
+    b
+  elsif a.is_a?(Type::Record) && b.is_a?(Type::Record)
     meet_members = a.members.merge(b.members) do |_, value_a, value_b|
       meet(value_a, value_b)
     end
-    return Type::Record.new(meet_members)
+    Type::Record.new(meet_members)
+  elsif a.is_a?(Type::Function) && b.is_a?(Type::Function)
+    Type::Function.new(join(a.from, b.from), meet(a.to, b.to))
+  else
+    raise TypeError, "No meet of #{a.inspect} and #{b.inspect}"
   end
-  if a.is_a?(Type::Function) && b.is_a?(Type::Function)
-    return Type::Function.new(join(a.from, b.from), meet(a.to, b.to))
-  end
-  raise TypeError, "No meet of #{a.inspect} and #{b.inspect}"
 end
 
 def subtype_of?(subtype, supertype)
-  return true if supertype == Type::Top # SA-TOP
-  return true if subtype == supertype # S-REFL
-  if subtype.is_a?(Type::Record) && supertype.is_a?(Type::Record)
-    return supertype.members.all? do |field, type|
+  if supertype == Type::Top # SA-TOP
+    true
+  elsif subtype == supertype # S-REFL
+    true
+  elsif subtype.is_a?(Type::Record) && supertype.is_a?(Type::Record)
+    supertype.members.all? do |field, type|
       subtype.members.key?(field) && subtype_of?(subtype.members[field], type)
     end
-  end
-  if subtype.is_a?(Type::Function) && supertype.is_a?(Type::Function)
-    return (
-      subtype_of?(supertype.from, subtype.from) &&
+  elsif subtype.is_a?(Type::Function) && supertype.is_a?(Type::Function)
+    subtype_of?(supertype.from, subtype.from) &&
       subtype_of?(subtype.to, supertype.to)
-    )
+  else
+    false
   end
-  false
 end
 
 def type_of(term, context = {})
