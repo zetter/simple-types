@@ -2,8 +2,8 @@ require 'term'
 require 'type'
 
 def join(a, b)
-  return a if subtype_of?(b, a)
-  return b if subtype_of?(a, b)
+  return a if a == b
+
   if a.is_a?(Type::Record) && b.is_a?(Type::Record)
     join_keys = a.members.keys & b.members.keys
     members = join_keys.map do |key|
@@ -23,8 +23,10 @@ def join(a, b)
 end
 
 def meet(a, b)
-  return a if subtype_of?(a, b)
-  return b if subtype_of?(b, a)
+  return a if a == b
+  return a if b == Type::Top
+  return b if a == Type::Top
+
   if a.is_a?(Type::Record) && b.is_a?(Type::Record)
     meet_members = a.members.merge(b.members) do |_, value_a, value_b|
       meet(value_a, value_b)
